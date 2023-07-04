@@ -8,91 +8,94 @@ from typing import Any, Iterable, Mapping, SupportsFloat
 
 import numpy as np
 
-from gymnasium import Env, Wrapper
-from gymnasium.core import RenderFrame, WrapperActType, WrapperObsType
+import gymnasium as gym
+from gymnasium.core import ActType, ObsType, RenderFrame, WrapperActType, WrapperObsType
 from gymnasium.error import DependencyNotInstalled
 
 
 try:
+    import jax
     import jax.numpy as jnp
 except ImportError:
-    # We handle the error internal to the relative functions
-    jnp = None
+    raise DependencyNotInstalled(
+        "Jax is not installed therefore cannot call `numpy_to_jax`, run `pip install gymnasium[jax]`"
+    )
+
+__all__ = ["JaxToNumpyV0", "jax_to_numpy", "numpy_to_jax"]
 
 
 @functools.singledispatch
 def numpy_to_jax(value: Any) -> Any:
-    """Converts a value to a Jax DeviceArray."""
-    if jnp is None:
-        raise DependencyNotInstalled(
-            "Jax is not installed therefore cannot call `numpy_to_jax`, run `pip install gymnasium[jax]`"
-        )
-    else:
-        raise Exception(
-            f"No known conversion for Numpy type ({type(value)}) to Jax registered. Report as issue on github."
-        )
+    """Converts a value to a Jax Array."""
+    raise Exception(
+        f"No known conversion for Numpy type ({type(value)}) to Jax registered. Report as issue on github."
+    )
 
 
-if jnp is not None:
+@numpy_to_jax.register(numbers.Number)
+def _number_to_jax(
+    value: numbers.Number,
+) -> jax.Array:
+    """Converts a number (int, float, etc.) to a Jax Array."""
+    assert jnp is not None
+    return jnp.array(value)
 
-    @numpy_to_jax.register(numbers.Number)
-    @numpy_to_jax.register(np.ndarray)
-    def _number_ndarray_numpy_to_jax(
-        value: np.ndarray | numbers.Number,
-    ) -> jnp.DeviceArray:
-        """Converts a numpy array or  number (int, float, etc.) to a Jax DeviceArray."""
-        assert jnp is not None
-        return jnp.array(value)
 
-    @numpy_to_jax.register(abc.Mapping)
-    def _mapping_numpy_to_jax(value: Mapping[str, Any]) -> Mapping[str, Any]:
-        """Converts a dictionary of numpy arrays to a mapping of Jax DeviceArrays."""
-        return type(value)(**{k: numpy_to_jax(v) for k, v in value.items()})
+@numpy_to_jax.register(np.ndarray)
+def _numpy_array_to_jax(value: np.ndarray) -> jax.Array:
+    """Converts a NumPy Array to a Jax Array with the same dtype (excluding float64 without being enabled)."""
+    assert jnp is not None
+    return jnp.array(value, dtype=value.dtype)
 
-    @numpy_to_jax.register(abc.Iterable)
-    def _iterable_numpy_to_jax(
-        value: Iterable[np.ndarray | Any],
-    ) -> Iterable[jnp.DeviceArray | Any]:
-        """Converts an Iterable from Numpy Arrays to an iterable of Jax DeviceArrays."""
-        return type(value)(numpy_to_jax(v) for v in value)
+
+@numpy_to_jax.register(abc.Mapping)
+def _mapping_numpy_to_jax(value: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Converts a dictionary of numpy arrays to a mapping of Jax Array."""
+    return type(value)(**{k: numpy_to_jax(v) for k, v in value.items()})
+
+
+@numpy_to_jax.register(abc.Iterable)
+def _iterable_numpy_to_jax(
+    value: Iterable[np.ndarray | Any],
+) -> Iterable[jax.Array | Any]:
+    """Converts an Iterable from Numpy Arrays to an iterable of Jax Array."""
+    return type(value)(numpy_to_jax(v) for v in value)
 
 
 @functools.singledispatch
 def jax_to_numpy(value: Any) -> Any:
     """Converts a value to a numpy array."""
-    if jnp is None:
-        raise DependencyNotInstalled(
-            "Jax is not installed therefore cannot call `jax_to_numpy`, run `pip install gymnasium[jax]`"
-        )
-    else:
-        raise Exception(
-            f"No known conversion for Jax type ({type(value)}) to NumPy registered. Report as issue on github."
-        )
+    raise Exception(
+        f"No known conversion for Jax type ({type(value)}) to NumPy registered. Report as issue on github."
+    )
 
 
-if jnp is not None:
-
-    @jax_to_numpy.register(jnp.DeviceArray)
-    def _devicearray_jax_to_numpy(value: jnp.DeviceArray) -> np.ndarray:
-        """Converts a Jax DeviceArray to a numpy array."""
-        return np.array(value)
-
-    @jax_to_numpy.register(abc.Mapping)
-    def _mapping_jax_to_numpy(
-        value: Mapping[str, jnp.DeviceArray | Any]
-    ) -> Mapping[str, np.ndarray | Any]:
-        """Converts a dictionary of Jax DeviceArrays to a mapping of numpy arrays."""
-        return type(value)(**{k: jax_to_numpy(v) for k, v in value.items()})
-
-    @jax_to_numpy.register(abc.Iterable)
-    def _iterable_jax_to_numpy(
-        value: Iterable[np.ndarray | Any],
-    ) -> Iterable[jnp.DeviceArray | Any]:
-        """Converts an Iterable from Numpy arrays to an iterable of Jax DeviceArrays."""
-        return type(value)(jax_to_numpy(v) for v in value)
+@jax_to_numpy.register(jax.Array)
+def _devicearray_jax_to_numpy(value: jax.Array) -> np.ndarray:
+    """Converts a Jax Array to a numpy array."""
+    return np.array(value)
 
 
-class JaxToNumpyV0(Wrapper):
+@jax_to_numpy.register(abc.Mapping)
+def _mapping_jax_to_numpy(
+    value: Mapping[str, jax.Array | Any]
+) -> Mapping[str, np.ndarray | Any]:
+    """Converts a dictionary of Jax Array to a mapping of numpy arrays."""
+    return type(value)(**{k: jax_to_numpy(v) for k, v in value.items()})
+
+
+@jax_to_numpy.register(abc.Iterable)
+def _iterable_jax_to_numpy(
+    value: Iterable[np.ndarray | Any],
+) -> Iterable[jax.Array | Any]:
+    """Converts an Iterable from Numpy arrays to an iterable of Jax Array."""
+    return type(value)(jax_to_numpy(v) for v in value)
+
+
+class JaxToNumpyV0(
+    gym.Wrapper[WrapperObsType, WrapperActType, ObsType, ActType],
+    gym.utils.RecordConstructorArgs,
+):
     """Wraps a jax environment so that it can be interacted with through numpy arrays.
 
     Actions must be provided as numpy arrays and observations will be returned as numpy arrays.
@@ -102,17 +105,18 @@ class JaxToNumpyV0(Wrapper):
         The reason for this is jax does not support non-array values, therefore numpy ``int_32(5) -> DeviceArray([5], dtype=jnp.int23)``
     """
 
-    def __init__(self, env: Env):
-        """Wraps an environment such that the input and outputs are numpy arrays.
+    def __init__(self, env: gym.Env[ObsType, ActType]):
+        """Wraps a jax environment such that the input and outputs are numpy arrays.
 
         Args:
-            env: the environment to wrap
+            env: the jax environment to wrap
         """
         if jnp is None:
             raise DependencyNotInstalled(
-                "Jax is not installed, run `pip install gymnasium[jax]`"
+                "jax is not installed, run `pip install gymnasium[jax]`"
             )
-        super().__init__(env)
+        gym.utils.RecordConstructorArgs.__init__(self)
+        gym.Wrapper.__init__(self, env)
 
     def step(
         self, action: WrapperActType
@@ -123,7 +127,7 @@ class JaxToNumpyV0(Wrapper):
             action: the action to perform as a numpy array
 
         Returns:
-            A tuple containing the next observation, reward, termination, truncation, and extra info.
+            A tuple containing numpy versions of the next observation, reward, termination, truncation, and extra info.
         """
         jax_action = numpy_to_jax(action)
         obs, reward, terminated, truncated, info = self.env.step(jax_action)

@@ -1,4 +1,5 @@
 import pickle
+import re
 import warnings
 
 import pytest
@@ -16,12 +17,10 @@ from tests.envs.utils import (
 # This runs a smoketest on each official registered env. We may want
 # to try also running environments which are not officially registered envs.
 PASSIVE_CHECK_IGNORE_WARNING = [
-    f"\x1b[33mWARN: {message}\x1b[0m"
-    for message in [
-        "This version of the mujoco environments depends on the mujoco-py bindings, which are no longer maintained and may stop working. Please upgrade to the v4 versions of the environments (which depend on the mujoco python bindings instead), unless you are trying to precisely replicate previous works).",
-        "Initializing environment in done (old) step API which returns one bool instead of two.",
-    ]
+    r"\x1b\[33mWARN: This version of the mujoco environments depends on the mujoco-py bindings, which are no longer maintained and may stop working\. Please upgrade to the v4 versions of the environments \(which depend on the mujoco python bindings instead\), unless you are trying to precisely replicate previous works\)\.\x1b\[0m",
+    r"\x1b\[33mWARN: The environment (.*?) is out of date\. You should consider upgrading to version `v(\d)`\.\x1b\[0m",
 ]
+
 
 CHECK_ENV_IGNORE_WARNINGS = [
     f"\x1b[33mWARN: {message}\x1b[0m"
@@ -39,10 +38,10 @@ CHECK_ENV_IGNORE_WARNINGS = [
     all_testing_env_specs,
     ids=[spec.id for spec in all_testing_env_specs],
 )
-def test_envs_pass_env_checker(spec):
+def test_all_env_api(spec):
     """Check that all environments pass the environment checker with no warnings other than the expected."""
     with warnings.catch_warnings(record=True) as caught_warnings:
-        env = spec.make(disable_env_checker=True).unwrapped
+        env = spec.make().unwrapped
         check_env(env, skip_render_check=True)
 
         env.close()
@@ -50,6 +49,24 @@ def test_envs_pass_env_checker(spec):
     for warning in caught_warnings:
         if warning.message.args[0] not in CHECK_ENV_IGNORE_WARNINGS:
             raise gym.error.Error(f"Unexpected warning: {warning.message}")
+
+
+@pytest.mark.parametrize(
+    "spec", all_testing_env_specs, ids=[spec.id for spec in all_testing_env_specs]
+)
+def test_all_env_passive_env_checker(spec):
+    with warnings.catch_warnings(record=True) as caught_warnings:
+        env = gym.make(spec.id)
+        env.reset()
+        env.step(env.action_space.sample())
+
+        env.close()
+
+    passive_check_pattern = re.compile("|".join(PASSIVE_CHECK_IGNORE_WARNING))
+
+    for warning in caught_warnings:
+        if not passive_check_pattern.search(str(warning.message)):
+            print(f"Unexpected warning: {warning.message}")
 
 
 # Note that this precludes running this test in multiple threads.

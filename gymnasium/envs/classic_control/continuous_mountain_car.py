@@ -144,7 +144,6 @@ class Continuous_MountainCarEnv(gym.Env):
         )
 
     def step(self, action: np.ndarray):
-
         position = self.state[0]
         velocity = self.state[1]
         force = min(max(action[0], self.min_action), self.max_action)
@@ -207,7 +206,7 @@ class Continuous_MountainCarEnv(gym.Env):
             from pygame import gfxdraw
         except ImportError as e:
             raise DependencyNotInstalled(
-                "pygame is not installed, run `pip install gymnasium[classic_control]`"
+                "pygame is not installed, run `pip install gymnasium[classic-control]`"
             ) from e
 
         if self.screen is None:

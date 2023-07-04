@@ -7,7 +7,7 @@ import gymnasium as gym
 from gymnasium.error import DependencyNotInstalled
 
 
-class HumanRendering(gym.Wrapper):
+class HumanRendering(gym.Wrapper, gym.utils.RecordConstructorArgs):
     """Performs human rendering for an environment that only supports "rgb_array"rendering.
 
     This wrapper is particularly useful when you have implemented an environment that can produce
@@ -18,27 +18,27 @@ class HumanRendering(gym.Wrapper):
     The ``render_mode`` of the wrapped environment must be either ``'rgb_array'`` or ``'rgb_array_list'``.
 
     Example:
+        >>> import gymnasium as gym
+        >>> from gymnasium.wrappers import HumanRendering
         >>> env = gym.make("LunarLander-v2", render_mode="rgb_array")
         >>> wrapped = HumanRendering(env)
-        >>> wrapped.reset()     # This will start rendering to the screen
+        >>> obs, _ = wrapped.reset()     # This will start rendering to the screen
 
-    The wrapper can also be applied directly when the environment is instantiated, simply by passing
-    ``render_mode="human"`` to ``make``. The wrapper will only be applied if the environment does not
-    implement human-rendering natively (i.e. ``render_mode`` does not contain ``"human"``).
+        The wrapper can also be applied directly when the environment is instantiated, simply by passing
+        ``render_mode="human"`` to ``make``. The wrapper will only be applied if the environment does not
+        implement human-rendering natively (i.e. ``render_mode`` does not contain ``"human"``).
 
-    Example:
-        >>> env = gym.make("NoNativeRendering-v2", render_mode="human")      # NoNativeRendering-v0 doesn't implement human-rendering natively
-        >>> env.reset()     # This will start rendering to the screen
+        >>> env = gym.make("phys2d/CartPole-v1", render_mode="human")      # phys2d/CartPole-v1 doesn't implement human-rendering natively
+        >>> obs, _ = env.reset()     # This will start rendering to the screen
 
-    Warning: If the base environment uses ``render_mode="rgb_array_list"``, its (i.e. the *base environment's*) render method
+        Warning: If the base environment uses ``render_mode="rgb_array_list"``, its (i.e. the *base environment's*) render method
         will always return an empty list:
 
-            >>> env = gym.make("LunarLander-v2", render_mode="rgb_array_list")
-            >>> wrapped = HumanRendering(env)
-            >>> wrapped.reset()
-            >>> env.render()
-            []          # env.render() will always return an empty list!
-
+        >>> env = gym.make("LunarLander-v2", render_mode="rgb_array_list")
+        >>> wrapped = HumanRendering(env)
+        >>> obs, _ = wrapped.reset()
+        >>> env.render()     # env.render() will always return an empty list!
+        []
     """
 
     def __init__(self, env):
@@ -47,7 +47,9 @@ class HumanRendering(gym.Wrapper):
         Args:
             env: The environment that is being wrapped
         """
-        super().__init__(env)
+        gym.utils.RecordConstructorArgs.__init__(self)
+        gym.Wrapper.__init__(self, env)
+
         assert env.render_mode in [
             "rgb_array",
             "rgb_array_list",
@@ -63,6 +65,8 @@ class HumanRendering(gym.Wrapper):
         self.metadata = copy.deepcopy(self.env.metadata)
         if "human" not in self.metadata["render_modes"]:
             self.metadata["render_modes"].append("human")
+
+        gym.utils.RecordConstructorArgs.__init__(self)
 
     @property
     def render_mode(self):

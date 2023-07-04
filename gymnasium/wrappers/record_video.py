@@ -10,7 +10,7 @@ from gymnasium.wrappers.monitoring import video_recorder
 def capped_cubic_video_schedule(episode_id: int) -> bool:
     """The default episode trigger.
 
-    This function will trigger recordings at the episode indices 0, 1, 4, 8, 27, ..., :math:`k^3`, ..., 729, 1000, 2000, 3000, ...
+    This function will trigger recordings at the episode indices 0, 1, 8, 27, ..., :math:`k^3`, ..., 729, 1000, 2000, 3000, ...
 
     Args:
         episode_id: The episode number
@@ -24,7 +24,7 @@ def capped_cubic_video_schedule(episode_id: int) -> bool:
         return episode_id % 1000 == 0
 
 
-class RecordVideo(gym.Wrapper):
+class RecordVideo(gym.Wrapper, gym.utils.RecordConstructorArgs):
     """This wrapper records videos of rollouts.
 
     Usually, you only want to record episodes intermittently, say every hundredth episode.
@@ -58,9 +58,24 @@ class RecordVideo(gym.Wrapper):
                 Otherwise, snippets of the specified length are captured
             name_prefix (str): Will be prepended to the filename of the recordings
             disable_logger (bool): Whether to disable moviepy logger or not.
-
         """
-        super().__init__(env)
+        gym.utils.RecordConstructorArgs.__init__(
+            self,
+            video_folder=video_folder,
+            episode_trigger=episode_trigger,
+            step_trigger=step_trigger,
+            video_length=video_length,
+            name_prefix=name_prefix,
+            disable_logger=disable_logger,
+        )
+        gym.Wrapper.__init__(self, env)
+
+        if env.render_mode in {None, "human", "ansi", "ansi_list"}:
+            raise ValueError(
+                f"Render mode is {env.render_mode}, which is incompatible with"
+                f" RecordVideo. Initialize your environment with a render_mode"
+                f" that returns an image, such as rgb_array."
+            )
 
         if episode_trigger is None and step_trigger is None:
             episode_trigger = capped_cubic_video_schedule
@@ -100,7 +115,7 @@ class RecordVideo(gym.Wrapper):
         self.truncated = False
         if self.recording:
             assert self.video_recorder is not None
-            self.video_recorder.frames = []
+            self.video_recorder.recorded_frames = []
             self.video_recorder.capture_frame()
             self.recorded_frames += 1
             if self.video_length > 0:

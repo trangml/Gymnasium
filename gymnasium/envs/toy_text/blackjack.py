@@ -25,7 +25,7 @@ def draw_hand(np_random):
 
 
 def usable_ace(hand):  # Does this hand have a usable ace?
-    return 1 in hand and sum(hand) + 10 <= 21
+    return int(1 in hand and sum(hand) + 10 <= 21)
 
 
 def sum_hand(hand):  # Return current hand total
@@ -237,7 +237,7 @@ class BlackjackEnv(gym.Env):
             import pygame
         except ImportError as e:
             raise DependencyNotInstalled(
-                "pygame is not installed, run `pip install gymnasium[toy_text]`"
+                "pygame is not installed, run `pip install gymnasium[toy-text]`"
             ) from e
 
         player_sum, dealer_card_value, usable_ace = self._get_obs()

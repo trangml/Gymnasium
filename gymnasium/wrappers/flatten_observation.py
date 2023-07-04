@@ -3,18 +3,19 @@ import gymnasium as gym
 from gymnasium import spaces
 
 
-class FlattenObservation(gym.ObservationWrapper):
+class FlattenObservation(gym.ObservationWrapper, gym.utils.RecordConstructorArgs):
     """Observation wrapper that flattens the observation.
 
     Example:
         >>> import gymnasium as gym
-        >>> env = gym.make('CarRacing-v1')
+        >>> from gymnasium.wrappers import FlattenObservation
+        >>> env = gym.make("CarRacing-v2")
         >>> env.observation_space.shape
         (96, 96, 3)
         >>> env = FlattenObservation(env)
         >>> env.observation_space.shape
         (27648,)
-        >>> obs, info = env.reset()
+        >>> obs, _ = env.reset()
         >>> obs.shape
         (27648,)
     """
@@ -25,7 +26,9 @@ class FlattenObservation(gym.ObservationWrapper):
         Args:
             env: The environment to apply the wrapper
         """
-        super().__init__(env)
+        gym.utils.RecordConstructorArgs.__init__(self)
+        gym.ObservationWrapper.__init__(self, env)
+
         self.observation_space = spaces.flatten_space(env.observation_space)
 
     def observation(self, observation):

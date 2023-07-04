@@ -153,7 +153,6 @@ class OffScreenViewer(BaseRender):
         self.cam.distance = self.model.stat.extent
 
     def _get_opengl_backend(self, width: int, height: int):
-
         self.backend = os.environ.get("MUJOCO_GL")
         if self.backend is not None:
             try:
@@ -197,7 +196,6 @@ class OffScreenViewer(BaseRender):
         camera_id: Optional[int] = None,
         segmentation: bool = False,
     ):
-
         if camera_id is not None:
             if camera_id == -1:
                 self.cam.type = mujoco.mjtCamera.mjCAMERA_FREE
@@ -329,8 +327,8 @@ class WindowViewer(BaseRender):
         if self.window:
             if glfw.get_current_context() == self.window:
                 glfw.make_context_current(None)
-        glfw.destroy_window(self.window)
-        self.window = None
+            glfw.destroy_window(self.window)
+            self.window = None
 
     def __del__(self):
         """Eliminate all of the OpenGL glfw contexts and windows"""
@@ -348,6 +346,7 @@ class WindowViewer(BaseRender):
             6. Swap front and back buffer, https://www.glfw.org/docs/3.3/quick.html.
             7. Poll events like mouse clicks or keyboard input.
         """
+
         # mjv_updateScene, mjr_render, mjr_overlay
         def update():
             # fill overlay items
@@ -604,7 +603,7 @@ class MujocoRenderer:
 
     The class has two main public methods available:
     - :meth:`render` - Renders the environment in three possible modes: "human", "rgb_array", or "depth_array"
-    - :meth:`close` - Closes all contexts initialized with the rendere
+    - :meth:`close` - Closes all contexts initialized with the renderer
 
     """
 
@@ -687,7 +686,7 @@ class MujocoRenderer:
                 self.viewer = OffScreenViewer(self.model, self.data)
             else:
                 raise AttributeError(
-                    f"Unexpected mode: {render_mode}, expected modes: human, rgb_arrray, or depth_array"
+                    f"Unexpected mode: {render_mode}, expected modes: human, rgb_array, or depth_array"
                 )
             # Add default camera parameters
             self._set_cam_config()

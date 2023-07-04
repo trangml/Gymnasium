@@ -6,9 +6,9 @@ firstpage:
 
 # Basic Usage
 
-Gymnasium is a project that provide an API for all single agent reinforcement learning environments that include implementations of common environments: cartpole, pendulum, mountain-car, mujoco, atari, and more.
+Gymnasium is a project that provides an API for all single agent reinforcement learning environments, and includes implementations of common environments: cartpole, pendulum, mountain-car, mujoco, atari, and more.
 
-The API contains four key functions: ``make``, ``reset``, ``step`` and ``render`` that this basic usage will introduce you to. At the core of Gymnasium is ``Env`` which is a high level python class representing a markov decision process from reinforcement learning theory (this is not a perfect reconstruction missing several components of MDPs). Within gymnasium, environments (MDPs) are implements as ``Env`` along with ``Wrappers`` that can change the results passed to the user.
+The API contains four key functions: ``make``, ``reset``, ``step`` and ``render``, that this basic usage will introduce you to. At the core of Gymnasium is ``Env``, a high-level python class representing a markov decision process (MDP) from reinforcement learning theory (this is not a perfect reconstruction, and is missing several components of MDPs). Within gymnasium, environments (MDPs) are implemented as ``Env`` classes, along with ``Wrappers``, which provide helpful utilities and can change the results passed to the user.
 
 ## Initializing Environments
 
@@ -77,7 +77,7 @@ Every environment specifies the format of valid actions and observations with th
 
 In the example, we sampled random actions via ``env.action_space.sample()`` instead of using an agent policy, mapping observations to actions which users will want to make. See one of the agent tutorials for an example of creating and training an agent policy.
 
-Every environment should have the attributes ``action_space`` and ``observation_space``, both of which should be instances of classes that inherit from ``Space``. Gymnasium has support for a major of possible spaces are users need:
+Every environment should have the attributes ``action_space`` and ``observation_space``, both of which should be instances of classes that inherit from ``Space``. Gymnasium has support for a majority of possible spaces users might need:
 
 - ``Box``: describes an n-dimensional continuous space. It's a bounded space where we can define the upper and lower
   limits which describe the valid values our observations can take.
@@ -97,14 +97,15 @@ Wrappers are a convenient way to modify an existing environment without having t
 In order to wrap an environment, you must first initialize a base environment. Then you can pass this environment along with (possibly optional) parameters to the wrapper's constructor:
 
 ```python
->>> import gymnasium
->>> from gymnasium.wrappers import RescaleAction
->>> base_env = gymnasium.make("BipedalWalker-v3")
->>> base_env.action_space
-Box([-1. -1. -1. -1.], [1. 1. 1. 1.], (4,), float32)
->>> wrapped_env = RescaleAction(base_env, min_action=0, max_action=1)
->>> wrapped_env.action_space
-Box([0. 0. 0. 0.], [1. 1. 1. 1.], (4,), float32)
+>>> import gymnasium as gym
+>>> from gymnasium.wrappers import FlattenObservation
+>>> env = gym.make("CarRacing-v2")
+>>> env.observation_space.shape
+(96, 96, 3)
+>>> wrapped_env = FlattenObservation(env)
+>>> wrapped_env.observation_space.shape
+(27648,)
+
 ```
 
 Gymnasium already provides many commonly used wrappers for you. Some examples:
@@ -120,13 +121,14 @@ If you have a wrapped environment, and you want to get the unwrapped environment
 
 ```python
 >>> wrapped_env
-<RescaleAction<TimeLimit<BipedalWalker<BipedalWalker-v3>>>>
+<FlattenObservation<TimeLimit<OrderEnforcing<PassiveEnvChecker<CarRacing<CarRacing-v2>>>>>>
 >>> wrapped_env.unwrapped
-<gymnasium.envs.box2d.bipedal_walker.BipedalWalker object at 0x7f87d70712d0>
+<gymnasium.envs.box2d.car_racing.CarRacing object at 0x7f04efcb8850>
+
 ```
 
 ## More information
 
-* [Making a Custom environment using the Gymnasium API](/tutorials/environment_creation)
-* [Training an agent to play blackjack](/tutorials/blackjack_tutorial)
+* [Making a Custom environment using the Gymnasium API](/tutorials/gymnasium_basics/environment_creation/)
+* [Training an agent to play blackjack](/tutorials/training_agents/blackjack_tutorial)
 * [Compatibility with OpenAI Gym](/content/gym_compatibility)

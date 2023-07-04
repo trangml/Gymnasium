@@ -7,7 +7,7 @@ import gymnasium as gym
 from gymnasium.spaces import Box
 
 
-class RescaleAction(gym.ActionWrapper):
+class RescaleAction(gym.ActionWrapper, gym.utils.RecordConstructorArgs):
     """Affinely rescales the continuous action space of the environment to the range [min_action, max_action].
 
     The base environment :attr:`env` must have an action space of type :class:`spaces.Box`. If :attr:`min_action`
@@ -15,15 +15,17 @@ class RescaleAction(gym.ActionWrapper):
 
     Example:
         >>> import gymnasium as gym
-        >>> env = gym.make('BipedalWalker-v3')
-        >>> env.action_space
-        Box(-1.0, 1.0, (4,), float32)
+        >>> from gymnasium.wrappers import RescaleAction
+        >>> import numpy as np
+        >>> env = gym.make("Hopper-v4")
+        >>> _ = env.reset(seed=42)
+        >>> obs, _, _, _, _ = env.step(np.array([1,1,1]))
+        >>> _ = env.reset(seed=42)
         >>> min_action = -0.5
-        >>> max_action = np.array([0.0, 0.5, 1.0, 0.75])
-        >>> env = RescaleAction(env, min_action=min_action, max_action=max_action)
-        >>> env.action_space
-        Box(-0.5, [0.   0.5  1.   0.75], (4,), float32)
-        >>> RescaleAction(env, min_action, max_action).action_space == gym.spaces.Box(min_action, max_action)
+        >>> max_action = np.array([0.0, 0.5, 0.75])
+        >>> wrapped_env = RescaleAction(env, min_action=min_action, max_action=max_action)
+        >>> wrapped_env_obs, _, _, _, _ = wrapped_env.step(max_action)
+        >>> np.alltrue(obs == wrapped_env_obs)
         True
     """
 
@@ -45,12 +47,23 @@ class RescaleAction(gym.ActionWrapper):
         ), f"expected Box action space, got {type(env.action_space)}"
         assert np.less_equal(min_action, max_action).all(), (min_action, max_action)
 
-        super().__init__(env)
+        gym.utils.RecordConstructorArgs.__init__(
+            self, min_action=min_action, max_action=max_action
+        )
+        gym.ActionWrapper.__init__(self, env)
+
         self.min_action = (
             np.zeros(env.action_space.shape, dtype=env.action_space.dtype) + min_action
         )
         self.max_action = (
             np.zeros(env.action_space.shape, dtype=env.action_space.dtype) + max_action
+        )
+
+        self.action_space = Box(
+            low=min_action,
+            high=max_action,
+            shape=env.action_space.shape,
+            dtype=env.action_space.dtype,
         )
 
     def action(self, action):

@@ -1,12 +1,14 @@
 """Test the functional jax environment."""
 
-import jax
-import jax.numpy as jnp
-import jax.random as jrng
 import pytest
 
-from gymnasium.envs.phys2d.cartpole import CartPoleFunctional
-from gymnasium.envs.phys2d.pendulum import PendulumFunctional
+
+jax = pytest.importorskip("jax")
+import jax.numpy as jnp  # noqa: E402
+import jax.random as jrng  # noqa: E402
+
+from gymnasium.envs.phys2d.cartpole import CartPoleFunctional  # noqa: E402
+from gymnasium.envs.phys2d.pendulum import PendulumFunctional  # noqa: E402
 
 
 @pytest.mark.parametrize("env_class", [CartPoleFunctional, PendulumFunctional])
@@ -36,7 +38,7 @@ def test_without_transform(env_class):
             pytest.fail("Terminal is not castable to bool")
 
         assert next_state.dtype == jnp.float32
-        assert isinstance(obs, jnp.ndarray)
+        assert isinstance(obs, jax.Array)
         assert obs.dtype == jnp.float32
 
         state = next_state
@@ -70,7 +72,7 @@ def test_jit(env_class):
             pytest.fail("Terminal is not castable to bool")
 
         assert next_state.dtype == jnp.float32
-        assert isinstance(obs, jnp.ndarray)
+        assert isinstance(obs, jax.Array)
         assert obs.dtype == jnp.float32
 
         state = next_state
@@ -103,7 +105,7 @@ def test_vmap(env_class):
         assert reward.dtype == jnp.float32
         assert terminal.shape == (num_envs,)
         assert terminal.dtype == bool
-        assert isinstance(obs, jnp.ndarray)
+        assert isinstance(obs, jax.Array)
         assert obs.dtype == jnp.float32
 
         state = next_state

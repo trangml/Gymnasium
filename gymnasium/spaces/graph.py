@@ -29,9 +29,27 @@ class GraphInstance(NamedTuple):
 class Graph(Space[GraphInstance]):
     r"""A space representing graph information as a series of `nodes` connected with `edges` according to an adjacency matrix represented as a series of `edge_links`.
 
-    Example usage::
-
-        self.observation_space = spaces.Graph(node_space=space.Box(low=-100, high=100, shape=(3,)), edge_space=spaces.Discrete(3))
+    Example:
+        >>> from gymnasium.spaces import Graph, Box, Discrete
+        >>> observation_space = Graph(node_space=Box(low=-100, high=100, shape=(3,)), edge_space=Discrete(3), seed=42)
+        >>> observation_space.sample()
+        GraphInstance(nodes=array([[-12.224312 ,  71.71958  ,  39.473606 ],
+               [-81.16453  ,  95.12447  ,  52.22794  ],
+               [ 57.21286  , -74.37727  ,  -9.922812 ],
+               [-25.840395 ,  85.353    ,  28.773024 ],
+               [ 64.55232  , -11.317161 , -54.552258 ],
+               [ 10.916958 , -87.23655  ,  65.52624  ],
+               [ 26.33288  ,  51.61755  , -29.094807 ],
+               [ 94.1396   ,  78.62422  ,  55.6767   ],
+               [-61.072258 ,  -6.6557994, -91.23925  ],
+               [-69.142105 ,  36.60979  ,  48.95243  ]], dtype=float32), edges=array([2, 0, 1, 1, 0, 0, 1, 0]), edge_links=array([[7, 5],
+               [6, 9],
+               [4, 1],
+               [8, 6],
+               [7, 0],
+               [3, 7],
+               [8, 4],
+               [8, 8]], dtype=int32))
     """
 
     def __init__(
@@ -50,7 +68,7 @@ class Graph(Space[GraphInstance]):
 
         Args:
             node_space (Union[Box, Discrete]): space of the node features.
-            edge_space (Union[None, Box, Discrete]): space of the node features.
+            edge_space (Union[None, Box, Discrete]): space of the edge features.
             seed: Optionally, you can use this argument to seed the RNG that is used to sample from the space.
         """
         assert isinstance(
@@ -159,7 +177,7 @@ class Graph(Space[GraphInstance]):
         sampled_edge_links = None
         if sampled_edges is not None and num_edges > 0:
             sampled_edge_links = self.np_random.integers(
-                low=0, high=num_nodes, size=(num_edges, 2)
+                low=0, high=num_nodes, size=(num_edges, 2), dtype=np.int32
             )
 
         return GraphInstance(sampled_nodes, sampled_edges, sampled_edge_links)
@@ -211,9 +229,9 @@ class Graph(Space[GraphInstance]):
 
     def to_jsonable(
         self, sample_n: Sequence[GraphInstance]
-    ) -> list[dict[str, list[int] | list[float]]]:
+    ) -> list[dict[str, list[int | float]]]:
         """Convert a batch of samples from this space to a JSONable data type."""
-        ret_n: list[dict[str, list[int | float]]] = []
+        ret_n = []
         for sample in sample_n:
             ret = {"nodes": sample.nodes.tolist()}
             if sample.edges is not None and sample.edge_links is not None:
@@ -229,14 +247,15 @@ class Graph(Space[GraphInstance]):
         ret: list[GraphInstance] = []
         for sample in sample_n:
             if "edges" in sample:
+                assert self.edge_space is not None
                 ret_n = GraphInstance(
-                    np.asarray(sample["nodes"]),
-                    np.asarray(sample["edges"]),
-                    np.asarray(sample["edge_links"]),
+                    np.asarray(sample["nodes"], dtype=self.node_space.dtype),
+                    np.asarray(sample["edges"], dtype=self.edge_space.dtype),
+                    np.asarray(sample["edge_links"], dtype=np.int32),
                 )
             else:
                 ret_n = GraphInstance(
-                    np.asarray(sample["nodes"]),
+                    np.asarray(sample["nodes"], dtype=self.node_space.dtype),
                     None,
                     None,
                 )
