@@ -8,7 +8,7 @@ import numpy as np
 import gymnasium as gym
 
 
-class RecordEpisodeStatistics(gym.Wrapper):
+class RecordEpisodeStatistics(gym.Wrapper, gym.utils.RecordConstructorArgs):
     """This wrapper will keep track of cumulative rewards and episode lengths.
 
     At the end of an episode, the statistics of the episode will be added to ``info``
@@ -19,7 +19,6 @@ class RecordEpisodeStatistics(gym.Wrapper):
     After the completion of an episode, ``info`` will look like this::
 
         >>> info = {
-        ...     ...
         ...     "episode": {
         ...         "r": "<cumulative reward>",
         ...         "l": "<episode length>",
@@ -30,7 +29,10 @@ class RecordEpisodeStatistics(gym.Wrapper):
     For a vectorized environments the output will be in the form of::
 
         >>> infos = {
-        ...     ...
+        ...     "final_observation": "<array of length num-envs>",
+        ...     "_final_observation": "<boolean array of length num-envs>",
+        ...     "final_info": "<array of length num-envs>",
+        ...     "_final_info": "<boolean array of length num-envs>",
         ...     "episode": {
         ...         "r": "<array of cumulative reward>",
         ...         "l": "<array of episode length>",
@@ -54,15 +56,22 @@ class RecordEpisodeStatistics(gym.Wrapper):
             env (Env): The environment to apply the wrapper
             deque_size: The size of the buffers :attr:`return_queue` and :attr:`length_queue`
         """
-        super().__init__(env)
-        self.num_envs = getattr(env, "num_envs", 1)
+        gym.utils.RecordConstructorArgs.__init__(self, deque_size=deque_size)
+        gym.Wrapper.__init__(self, env)
+
+        try:
+            self.num_envs = self.get_wrapper_attr("num_envs")
+            self.is_vector_env = self.get_wrapper_attr("is_vector_env")
+        except AttributeError:
+            self.num_envs = 1
+            self.is_vector_env = False
+
         self.episode_count = 0
         self.episode_start_times: np.ndarray = None
         self.episode_returns: Optional[np.ndarray] = None
         self.episode_lengths: Optional[np.ndarray] = None
         self.return_queue = deque(maxlen=deque_size)
         self.length_queue = deque(maxlen=deque_size)
-        self.is_vector_env = getattr(env, "is_vector_env", False)
 
     def reset(self, **kwargs):
         """Resets the environment using kwargs and resets the episode returns and lengths."""

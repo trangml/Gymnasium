@@ -14,17 +14,20 @@ import numbers
 from collections import abc
 from typing import Any, Iterable, Mapping, SupportsFloat, Union
 
-from gymnasium import Env, Wrapper
+import gymnasium as gym
 from gymnasium.core import RenderFrame, WrapperActType, WrapperObsType
 from gymnasium.error import DependencyNotInstalled
 from gymnasium.experimental.wrappers.jax_to_numpy import jax_to_numpy
 
 
 try:
+    import jax
     import jax.numpy as jnp
     from jax import dlpack as jax_dlpack
 except ImportError:
-    jnp, jax_dlpack = None, None
+    raise DependencyNotInstalled(
+        "Jax is not installed therefore cannot call `torch_to_jax`, run `pip install gymnasium[jax]`"
+    )
 
 try:
     import torch
@@ -32,107 +35,87 @@ try:
 
     Device = Union[str, torch.device]
 except ImportError:
-    torch, torch_dlpack, Device = None, None, None
+    raise DependencyNotInstalled(
+        "Torch is not installed therefore cannot call `torch_to_jax`, run `pip install torch`"
+    )
+
+
+__all__ = ["JaxToTorchV0", "jax_to_torch", "torch_to_jax", "Device"]
 
 
 @functools.singledispatch
 def torch_to_jax(value: Any) -> Any:
-    """Converts a PyTorch Tensor into a Jax DeviceArray."""
-    if torch is None:
-        raise DependencyNotInstalled(
-            "Torch is not installed therefore cannot call `torch_to_jax`, run `pip install torch`"
-        )
-    elif jnp is None:
-        raise DependencyNotInstalled(
-            "Jax is not installed therefore cannot call `torch_to_jax`, run `pip install gymnasium[jax]`"
-        )
-    else:
-        raise Exception(
-            f"No known conversion for Torch type ({type(value)}) to Jax registered. Report as issue on github."
-        )
+    """Converts a PyTorch Tensor into a Jax Array."""
+    raise Exception(
+        f"No known conversion for Torch type ({type(value)}) to Jax registered. Report as issue on github."
+    )
 
 
-if torch is not None and jnp is not None:
+@torch_to_jax.register(numbers.Number)
+def _number_torch_to_jax(value: numbers.Number) -> Any:
+    """Convert a python number (int, float, complex) to a jax array."""
+    return jnp.array(value)
 
-    @torch_to_jax.register(numbers.Number)
-    def _number_torch_to_jax(value: numbers.Number) -> Any:
-        """Convert a python number (int, float, complex) to a jax array."""
-        assert jnp is not None
-        return jnp.array(value)
 
-    @torch_to_jax.register(torch.Tensor)
-    def _tensor_torch_to_jax(value: torch.Tensor) -> jnp.DeviceArray:
-        """Converts a PyTorch Tensor into a Jax DeviceArray."""
-        assert torch_dlpack is not None and jax_dlpack is not None
-        tensor = torch_dlpack.to_dlpack(  # pyright: ignore[reportPrivateImportUsage]
-            value
-        )
-        tensor = jax_dlpack.from_dlpack(  # pyright: ignore[reportPrivateImportUsage]
-            tensor
-        )
-        return tensor
+@torch_to_jax.register(torch.Tensor)
+def _tensor_torch_to_jax(value: torch.Tensor) -> jax.Array:
+    """Converts a PyTorch Tensor into a Jax Array."""
+    tensor = torch_dlpack.to_dlpack(value)  # pyright: ignore[reportPrivateImportUsage]
+    tensor = jax_dlpack.from_dlpack(tensor)  # pyright: ignore[reportPrivateImportUsage]
+    return tensor
 
-    @torch_to_jax.register(abc.Mapping)
-    def _mapping_torch_to_jax(value: Mapping[str, Any]) -> Mapping[str, Any]:
-        """Converts a mapping of PyTorch Tensors into a Dictionary of Jax DeviceArrays."""
-        return type(value)(**{k: torch_to_jax(v) for k, v in value.items()})
 
-    @torch_to_jax.register(abc.Iterable)
-    def _iterable_torch_to_jax(value: Iterable[Any]) -> Iterable[Any]:
-        """Converts an Iterable from PyTorch Tensors to an iterable of Jax DeviceArrays."""
-        return type(value)(torch_to_jax(v) for v in value)
+@torch_to_jax.register(abc.Mapping)
+def _mapping_torch_to_jax(value: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Converts a mapping of PyTorch Tensors into a Dictionary of Jax Array."""
+    return type(value)(**{k: torch_to_jax(v) for k, v in value.items()})
+
+
+@torch_to_jax.register(abc.Iterable)
+def _iterable_torch_to_jax(value: Iterable[Any]) -> Iterable[Any]:
+    """Converts an Iterable from PyTorch Tensors to an iterable of Jax Array."""
+    return type(value)(torch_to_jax(v) for v in value)
 
 
 @functools.singledispatch
 def jax_to_torch(value: Any, device: Device | None = None) -> Any:
-    """Converts a Jax DeviceArray into a PyTorch Tensor."""
-    if torch is None:
-        raise DependencyNotInstalled(
-            "Torch is not installed therefore cannot call `jax_to_torch`, run `pip install torch`"
-        )
-    elif jnp is None:
-        raise DependencyNotInstalled(
-            "Jax is not installed therefore cannot call `jax_to_torch`, run `pip install gymnasium[jax]`"
-        )
-    else:
-        raise Exception(
-            f"No known conversion for Jax type ({type(value)}) to PyTorch registered. Report as issue on github."
-        )
+    """Converts a Jax Array into a PyTorch Tensor."""
+    raise Exception(
+        f"No known conversion for Jax type ({type(value)}) to PyTorch registered. Report as issue on github."
+    )
 
 
-if torch is not None and jnp is not None:
-
-    @jax_to_torch.register(jnp.DeviceArray)
-    def _devicearray_jax_to_torch(
-        value: jnp.DeviceArray, device: Device | None = None
-    ) -> torch.Tensor:
-        """Converts a Jax DeviceArray into a PyTorch Tensor."""
-        assert jax_dlpack is not None and torch_dlpack is not None
-        dlpack = jax_dlpack.to_dlpack(  # pyright: ignore[reportPrivateImportUsage]
-            value
-        )
-        tensor = torch_dlpack.from_dlpack(dlpack)
-        if device:
-            return tensor.to(device=device)
-        return tensor
-
-    @jax_to_torch.register(abc.Mapping)
-    def _jax_mapping_to_torch(
-        value: Mapping[str, Any], device: Device | None = None
-    ) -> Mapping[str, Any]:
-        """Converts a mapping of Jax DeviceArrays into a Dictionary of PyTorch Tensors."""
-        return type(value)(**{k: jax_to_torch(v, device) for k, v in value.items()})
-
-    @jax_to_torch.register(abc.Iterable)
-    def _jax_iterable_to_torch(
-        value: Iterable[Any], device: Device | None = None
-    ) -> Iterable[Any]:
-        """Converts an Iterable from Jax DeviceArrays to an iterable of PyTorch Tensors."""
-        return type(value)(jax_to_torch(v, device) for v in value)
+@jax_to_torch.register(jax.Array)
+def _devicearray_jax_to_torch(
+    value: jax.Array, device: Device | None = None
+) -> torch.Tensor:
+    """Converts a Jax Array into a PyTorch Tensor."""
+    assert jax_dlpack is not None and torch_dlpack is not None
+    dlpack = jax_dlpack.to_dlpack(value)  # pyright: ignore[reportPrivateImportUsage]
+    tensor = torch_dlpack.from_dlpack(dlpack)
+    if device:
+        return tensor.to(device=device)
+    return tensor
 
 
-class JaxToTorchV0(Wrapper):
-    """Wraps a jax-based environment so that it can be interacted with through PyTorch Tensors.
+@jax_to_torch.register(abc.Mapping)
+def _jax_mapping_to_torch(
+    value: Mapping[str, Any], device: Device | None = None
+) -> Mapping[str, Any]:
+    """Converts a mapping of Jax Array into a Dictionary of PyTorch Tensors."""
+    return type(value)(**{k: jax_to_torch(v, device) for k, v in value.items()})
+
+
+@jax_to_torch.register(abc.Iterable)
+def _jax_iterable_to_torch(
+    value: Iterable[Any], device: Device | None = None
+) -> Iterable[Any]:
+    """Converts an Iterable from Jax Array to an iterable of PyTorch Tensors."""
+    return type(value)(jax_to_torch(v, device) for v in value)
+
+
+class JaxToTorchV0(gym.Wrapper, gym.utils.RecordConstructorArgs):
+    """Wraps a Jax-based environment so that it can be interacted with through PyTorch Tensors.
 
     Actions must be provided as PyTorch Tensors and observations will be returned as PyTorch Tensors.
 
@@ -140,23 +123,16 @@ class JaxToTorchV0(Wrapper):
         For ``rendered`` this is returned as a NumPy array not a pytorch Tensor.
     """
 
-    def __init__(self, env: Env, device: Device | None = None):
+    def __init__(self, env: gym.Env, device: Device | None = None):
         """Wrapper class to change inputs and outputs of environment to PyTorch tensors.
 
         Args:
             env: The Jax-based environment to wrap
             device: The device the torch Tensors should be moved to
         """
-        if torch is None:
-            raise DependencyNotInstalled(
-                "Torch is not installed, run `pip install torch`"
-            )
-        elif jnp is None:
-            raise DependencyNotInstalled(
-                "Jax is not installed, run `pip install gymnasium[jax]`"
-            )
+        gym.utils.RecordConstructorArgs.__init__(self, device=device)
+        gym.Wrapper.__init__(self, env)
 
-        super().__init__(env)
         self.device: Device | None = device
 
     def step(

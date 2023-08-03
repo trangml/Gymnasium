@@ -5,7 +5,7 @@ import gymnasium as gym
 from gymnasium.spaces import Box
 
 
-class TimeAwareObservation(gym.ObservationWrapper):
+class TimeAwareObservation(gym.ObservationWrapper, gym.utils.RecordConstructorArgs):
     """Augment the observation with the current time step in the episode.
 
     The observation space of the wrapped environment is assumed to be a flat :class:`Box`.
@@ -13,12 +13,14 @@ class TimeAwareObservation(gym.ObservationWrapper):
 
     Example:
         >>> import gymnasium as gym
-        >>> env = gym.make('CartPole-v1')
+        >>> from gymnasium.wrappers import TimeAwareObservation
+        >>> env = gym.make("CartPole-v1")
         >>> env = TimeAwareObservation(env)
-        >>> env.reset()
-        array([ 0.03810719,  0.03522411,  0.02231044, -0.01088205,  0.        ])
+        >>> env.reset(seed=42)
+        (array([ 0.0273956 , -0.00611216,  0.03585979,  0.0197368 ,  0.        ]), {})
+        >>> _ = env.action_space.seed(42)
         >>> env.step(env.action_space.sample())[0]
-        array([ 0.03881167, -0.16021058,  0.0220928 ,  0.28875574,  1.        ])
+        array([ 0.02727336, -0.20172954,  0.03625453,  0.32351476,  1.        ])
     """
 
     def __init__(self, env: gym.Env):
@@ -27,13 +29,19 @@ class TimeAwareObservation(gym.ObservationWrapper):
         Args:
             env: The environment to apply the wrapper
         """
-        super().__init__(env)
+        gym.utils.RecordConstructorArgs.__init__(self)
+        gym.ObservationWrapper.__init__(self, env)
+
         assert isinstance(env.observation_space, Box)
         assert env.observation_space.dtype == np.float32
         low = np.append(self.observation_space.low, 0.0)
         high = np.append(self.observation_space.high, np.inf)
         self.observation_space = Box(low, high, dtype=np.float32)
-        self.is_vector_env = getattr(env, "is_vector_env", False)
+
+        try:
+            self.is_vector_env = self.get_wrapper_attr("is_vector_env")
+        except AttributeError:
+            self.is_vector_env = False
 
     def observation(self, observation):
         """Adds to the observation with the current time step.

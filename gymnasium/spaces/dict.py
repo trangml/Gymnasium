@@ -4,7 +4,7 @@ from __future__ import annotations
 import collections.abc
 import typing
 from collections import OrderedDict
-from typing import Any, Sequence
+from typing import Any, KeysView, Sequence
 
 import numpy as np
 
@@ -16,17 +16,16 @@ class Dict(Space[typing.Dict[str, Any]], typing.Mapping[str, Space[Any]]):
 
     Elements of this space are (ordered) dictionaries of elements from the constituent spaces.
 
-    Example usage:
-
-        >>> from gymnasium.spaces import Dict, Discrete
-        >>> observation_space = Dict({"position": Discrete(2), "velocity": Discrete(3)})
+    Example:
+        >>> from gymnasium.spaces import Dict, Box, Discrete
+        >>> observation_space = Dict({"position": Box(-1, 1, shape=(2,)), "color": Discrete(3)}, seed=42)
         >>> observation_space.sample()
-        OrderedDict([('position', 1), ('velocity', 2)])
+        OrderedDict([('color', 0), ('position', array([-0.3991573 ,  0.21649833], dtype=float32))])
 
-    Example usage [nested]::
+        With a nested dict:
 
         >>> from gymnasium.spaces import Box, Dict, Discrete, MultiBinary, MultiDiscrete
-        >>> Dict(
+        >>> Dict(  # doctest: +SKIP
         ...     {
         ...         "ext_controller": MultiDiscrete([5, 2, 2]),
         ...         "inner_state": Dict(
@@ -61,14 +60,6 @@ class Dict(Space[typing.Dict[str, Any]], typing.Mapping[str, Space[Any]]):
         This space can be instantiated in one of two ways: Either you pass a dictionary
         of spaces to :meth:`__init__` via the ``spaces`` argument, or you pass the spaces as separate
         keyword arguments (where you will need to avoid the keys ``spaces`` and ``seed``)
-
-        Example::
-
-            >>> from gymnasium.spaces import Box, Discrete
-            >>> Dict({"position": Box(-1, 1, shape=(2,)), "color": Discrete(3)})
-            Dict(color:Discrete(3), position:Box(-1.0, 1.0, (2,), float32))
-            >>> Dict(position=Box(-1, 1, shape=(2,)), color=Discrete(3))
-            Dict(color:Discrete(3), position:Box(-1.0, 1.0, (2,), float32))
 
         Args:
             spaces: A dictionary of spaces. This specifies the structure of the :class:`Dict` space
@@ -110,7 +101,7 @@ class Dict(Space[typing.Dict[str, Any]], typing.Mapping[str, Space[Any]]):
             ), f"Dict space element is not an instance of Space: key='{key}', space={space}"
 
         # None for shape and dtype, since it'll require special handling
-        super().__init__(None, None, seed)
+        super().__init__(None, None, seed)  # type: ignore
 
     @property
     def is_np_flattenable(self):
@@ -189,6 +180,10 @@ class Dict(Space[typing.Dict[str, Any]], typing.Mapping[str, Space[Any]]):
         """Get the space that is associated to `key`."""
         return self.spaces[key]
 
+    def keys(self) -> KeysView:
+        """Returns the keys of the Dict."""
+        return KeysView(self.spaces)
+
     def __setitem__(self, key: str, value: Space[Any]):
         """Set the space that is associated to `key`."""
         assert isinstance(
@@ -226,7 +221,9 @@ class Dict(Space[typing.Dict[str, Any]], typing.Mapping[str, Space[Any]]):
             for key, space in self.spaces.items()
         }
 
-    def from_jsonable(self, sample_n: dict[str, list[Any]]) -> list[dict[str, Any]]:
+    def from_jsonable(
+        self, sample_n: dict[str, list[Any]]
+    ) -> list[OrderedDict[str, Any]]:
         """Convert a JSONable data type to a batch of samples from this space."""
         dict_of_list: dict[str, list[Any]] = {
             key: space.from_jsonable(sample_n[key])

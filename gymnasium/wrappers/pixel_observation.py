@@ -13,7 +13,7 @@ from gymnasium import spaces
 STATE_KEY = "state"
 
 
-class PixelObservationWrapper(gym.ObservationWrapper):
+class PixelObservationWrapper(gym.ObservationWrapper, gym.utils.RecordConstructorArgs):
     """Augment observations by pixel values.
 
     Observations of this wrapper will be dictionaries of images.
@@ -25,22 +25,23 @@ class PixelObservationWrapper(gym.ObservationWrapper):
 
     Example:
         >>> import gymnasium as gym
-        >>> env = PixelObservationWrapper(gym.make('CarRacing-v1', render_mode="rgb_array"))
-        >>> obs = env.reset()
+        >>> from gymnasium.wrappers import PixelObservationWrapper
+        >>> env = PixelObservationWrapper(gym.make("CarRacing-v2", render_mode="rgb_array"))
+        >>> obs, _ = env.reset()
         >>> obs.keys()
         odict_keys(['pixels'])
         >>> obs['pixels'].shape
         (400, 600, 3)
-        >>> env = PixelObservationWrapper(gym.make('CarRacing-v1', render_mode="rgb_array"), pixels_only=False)
-        >>> obs = env.reset()
+        >>> env = PixelObservationWrapper(gym.make("CarRacing-v2", render_mode="rgb_array"), pixels_only=False)
+        >>> obs, _ = env.reset()
         >>> obs.keys()
         odict_keys(['state', 'pixels'])
         >>> obs['state'].shape
         (96, 96, 3)
         >>> obs['pixels'].shape
         (400, 600, 3)
-        >>> env = PixelObservationWrapper(gym.make('CarRacing-v1', render_mode="rgb_array"), pixel_keys=('obs',))
-        >>> obs = env.reset()
+        >>> env = PixelObservationWrapper(gym.make("CarRacing-v2", render_mode="rgb_array"), pixel_keys=('obs',))
+        >>> obs, _ = env.reset()
         >>> obs.keys()
         odict_keys(['obs'])
         >>> obs['obs'].shape
@@ -78,7 +79,13 @@ class PixelObservationWrapper(gym.ObservationWrapper):
                 specified ``pixel_keys``.
             TypeError: When an unexpected pixel type is used
         """
-        super().__init__(env)
+        gym.utils.RecordConstructorArgs.__init__(
+            self,
+            pixels_only=pixels_only,
+            render_kwargs=render_kwargs,
+            pixel_keys=pixel_keys,
+        )
+        gym.ObservationWrapper.__init__(self, env)
 
         # Avoid side-effects that occur when render_kwargs is manipulated
         render_kwargs = copy.deepcopy(render_kwargs)

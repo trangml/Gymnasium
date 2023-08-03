@@ -5,17 +5,19 @@ import gymnasium as gym
 from gymnasium.spaces import Box
 
 
-class GrayScaleObservation(gym.ObservationWrapper):
+class GrayScaleObservation(gym.ObservationWrapper, gym.utils.RecordConstructorArgs):
     """Convert the image observation from RGB to gray scale.
 
     Example:
-        >>> env = gym.make('CarRacing-v1')
+        >>> import gymnasium as gym
+        >>> from gymnasium.wrappers import GrayScaleObservation
+        >>> env = gym.make("CarRacing-v2")
         >>> env.observation_space
         Box(0, 255, (96, 96, 3), uint8)
-        >>> env = GrayScaleObservation(gym.make('CarRacing-v1'))
+        >>> env = GrayScaleObservation(gym.make("CarRacing-v2"))
         >>> env.observation_space
         Box(0, 255, (96, 96), uint8)
-        >>> env = GrayScaleObservation(gym.make('CarRacing-v1'), keep_dim=True)
+        >>> env = GrayScaleObservation(gym.make("CarRacing-v2"), keep_dim=True)
         >>> env.observation_space
         Box(0, 255, (96, 96, 1), uint8)
     """
@@ -28,7 +30,9 @@ class GrayScaleObservation(gym.ObservationWrapper):
             keep_dim (bool): If `True`, a singleton dimension will be added, i.e. observations are of the shape AxBx1.
                 Otherwise, they are of shape AxB.
         """
-        super().__init__(env)
+        gym.utils.RecordConstructorArgs.__init__(self, keep_dim=keep_dim)
+        gym.ObservationWrapper.__init__(self, env)
+
         self.keep_dim = keep_dim
 
         assert (

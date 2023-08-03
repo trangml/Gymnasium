@@ -1,6 +1,11 @@
+from __future__ import annotations
+
+from typing import Any, SupportsFloat
+
 import numpy as np
 
 from gymnasium import utils
+from gymnasium.core import ActType, ObsType
 from gymnasium.envs.mujoco import MuJocoPyEnv
 from gymnasium.spaces import Box
 
@@ -41,7 +46,7 @@ class HumanoidEnv(MuJocoPyEnv, utils.EzPickle):
         healthy_z_range=(1.0, 2.0),
         reset_noise_scale=1e-2,
         exclude_current_positions_from_observation=True,
-        **kwargs
+        **kwargs,
     ):
         utils.EzPickle.__init__(
             self,
@@ -55,7 +60,7 @@ class HumanoidEnv(MuJocoPyEnv, utils.EzPickle):
             healthy_z_range,
             reset_noise_scale,
             exclude_current_positions_from_observation,
-            **kwargs
+            **kwargs,
         )
 
         self._forward_reward_weight = forward_reward_weight
@@ -139,7 +144,9 @@ class HumanoidEnv(MuJocoPyEnv, utils.EzPickle):
             )
         )
 
-    def step(self, action):
+    def step(
+        self, action: ActType
+    ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
         xy_position_before = mass_center(self.model, self.sim)
         self.do_simulation(action, self.frame_skip)
         xy_position_after = mass_center(self.model, self.sim)

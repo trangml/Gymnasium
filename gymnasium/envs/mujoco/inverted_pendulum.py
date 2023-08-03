@@ -1,6 +1,11 @@
+from __future__ import annotations
+
+from typing import Any, SupportsFloat
+
 import numpy as np
 
 from gymnasium import utils
+from gymnasium.core import ActType, ObsType
 from gymnasium.envs.mujoco import MuJocoPyEnv
 from gymnasium.spaces import Box
 
@@ -23,12 +28,14 @@ class InvertedPendulumEnv(MuJocoPyEnv, utils.EzPickle):
             "inverted_pendulum.xml",
             2,
             observation_space=observation_space,
-            **kwargs
+            **kwargs,
         )
 
-    def step(self, a):
+    def step(
+        self, action: ActType
+    ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
         reward = 1.0
-        self.do_simulation(a, self.frame_skip)
+        self.do_simulation(action, self.frame_skip)
 
         ob = self._get_obs()
         terminated = bool(not np.isfinite(ob).all() or (np.abs(ob[1]) > 0.2))

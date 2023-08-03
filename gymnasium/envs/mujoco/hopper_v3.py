@@ -1,8 +1,14 @@
+from __future__ import annotations
+
+
 __credits__ = ["Rushiv Arora"]
+
+from typing import Any, SupportsFloat
 
 import numpy as np
 
 from gymnasium import utils
+from gymnasium.core import ActType, ObsType
 from gymnasium.envs.mujoco import MuJocoPyEnv
 from gymnasium.spaces import Box
 
@@ -37,7 +43,7 @@ class HopperEnv(MuJocoPyEnv, utils.EzPickle):
         healthy_angle_range=(-0.2, 0.2),
         reset_noise_scale=5e-3,
         exclude_current_positions_from_observation=True,
-        **kwargs
+        **kwargs,
     ):
         utils.EzPickle.__init__(
             self,
@@ -51,7 +57,7 @@ class HopperEnv(MuJocoPyEnv, utils.EzPickle):
             healthy_angle_range,
             reset_noise_scale,
             exclude_current_positions_from_observation,
-            **kwargs
+            **kwargs,
         )
 
         self._forward_reward_weight = forward_reward_weight
@@ -127,7 +133,9 @@ class HopperEnv(MuJocoPyEnv, utils.EzPickle):
         observation = np.concatenate((position, velocity)).ravel()
         return observation
 
-    def step(self, action):
+    def step(
+        self, action: ActType
+    ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
         x_position_before = self.sim.data.qpos[0]
         self.do_simulation(action, self.frame_skip)
         x_position_after = self.sim.data.qpos[0]

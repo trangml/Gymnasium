@@ -1,11 +1,15 @@
+from __future__ import annotations
+
+
 """classic Acrobot task"""
-from typing import Optional
+from typing import Any, SupportsFloat
 
 import numpy as np
 from numpy import cos, pi, sin
 
 import gymnasium as gym
 from gymnasium import Env, spaces
+from gymnasium.core import ActType, ObsType, RenderFrame
 from gymnasium.envs.classic_control import utils
 from gymnasium.error import DependencyNotInstalled
 
@@ -170,7 +174,7 @@ class AcrobotEnv(Env):
     domain_fig = None
     actions_num = 3
 
-    def __init__(self, render_mode: Optional[str] = None):
+    def __init__(self, render_mode: str | None = None):
         self.render_mode = render_mode
         self.screen = None
         self.clock = None
@@ -183,7 +187,12 @@ class AcrobotEnv(Env):
         self.action_space = spaces.Discrete(3)
         self.state = None
 
-    def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None):
+    def reset(
+        self,
+        *,
+        seed: int | None = None,
+        options: dict[str, Any] | None = None,
+    ) -> tuple[ObsType, dict[str, Any]]:
         super().reset(seed=seed)
         # Note that if you use custom reset bounds, it may lead to out-of-bound
         # state/observations.
@@ -198,10 +207,12 @@ class AcrobotEnv(Env):
             self.render()
         return self._get_ob(), {}
 
-    def step(self, a):
+    def step(
+        self, action: ActType
+    ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
         s = self.state
         assert s is not None, "Call reset before using AcrobotEnv object."
-        torque = self.AVAIL_TORQUE[a]
+        torque = self.AVAIL_TORQUE[action]
 
         # Add noise to the force action
         if self.torque_noise_max > 0:
@@ -281,7 +292,7 @@ class AcrobotEnv(Env):
         ddtheta1 = -(d2 * ddtheta2 + phi1) / d1
         return dtheta1, dtheta2, ddtheta1, ddtheta2, 0.0
 
-    def render(self):
+    def render(self) -> RenderFrame | list[RenderFrame] | None:
         if self.render_mode is None:
             assert self.spec is not None
             gym.logger.warn(
@@ -296,7 +307,7 @@ class AcrobotEnv(Env):
             from pygame import gfxdraw
         except ImportError as e:
             raise DependencyNotInstalled(
-                "pygame is not installed, run `pip install gymnasium[classic_control]`"
+                "pygame is not installed, run `pip install gymnasium[classic-control]`"
             ) from e
 
         if self.screen is None:
@@ -343,7 +354,7 @@ class AcrobotEnv(Env):
             color=(0, 0, 0),
         )
 
-        for ((x, y), th, llen) in zip(xys, thetas, link_lengths):
+        for (x, y), th, llen in zip(xys, thetas, link_lengths):
             x = x + offset
             y = y + offset
             l, r, t, b = 0, llen, 0.1 * scale, -0.1 * scale
@@ -372,7 +383,7 @@ class AcrobotEnv(Env):
                 np.array(pygame.surfarray.pixels3d(self.screen)), axes=(1, 0, 2)
             )
 
-    def close(self):
+    def close(self) -> None:
         if self.screen is not None:
             import pygame
 
@@ -456,7 +467,6 @@ def rk4(derivs, y0, t):
     yout[0] = y0
 
     for i in np.arange(len(t) - 1):
-
         this = t[i]
         dt = t[i + 1] - this
         dt2 = dt / 2.0

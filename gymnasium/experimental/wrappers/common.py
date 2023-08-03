@@ -14,8 +14,7 @@ from typing import Any, SupportsFloat
 import numpy as np
 
 import gymnasium as gym
-from gymnasium import Env
-from gymnasium.core import ActType, ObsType, RenderFrame, WrapperActType, WrapperObsType
+from gymnasium.core import ActType, ObsType, RenderFrame
 from gymnasium.error import ResetNeeded
 from gymnasium.utils.passive_env_checker import (
     check_action_space,
@@ -26,22 +25,34 @@ from gymnasium.utils.passive_env_checker import (
 )
 
 
-class AutoresetV0(gym.Wrapper):
+__all__ = [
+    "AutoresetV0",
+    "PassiveEnvCheckerV0",
+    "OrderEnforcingV0",
+    "RecordEpisodeStatisticsV0",
+]
+
+
+class AutoresetV0(
+    gym.Wrapper[ObsType, ActType, ObsType, ActType], gym.utils.RecordConstructorArgs
+):
     """A class for providing an automatic reset functionality for gymnasium environments when calling :meth:`self.step`."""
 
-    def __init__(self, env: gym.Env):
+    def __init__(self, env: gym.Env[ObsType, ActType]):
         """A class for providing an automatic reset functionality for gymnasium environments when calling :meth:`self.step`.
 
         Args:
             env (gym.Env): The environment to apply the wrapper
         """
-        super().__init__(env)
+        gym.utils.RecordConstructorArgs.__init__(self)
+        gym.Wrapper.__init__(self, env)
+
         self._episode_ended: bool = False
         self._reset_options: dict[str, Any] | None = None
 
     def step(
-        self, action: WrapperActType
-    ) -> tuple[WrapperObsType, SupportsFloat, bool, bool, dict]:
+        self, action: ActType
+    ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
         """Steps through the environment with action and resets the environment if a terminated or truncated signal is encountered in the previous step.
 
         Args:
@@ -51,7 +62,7 @@ class AutoresetV0(gym.Wrapper):
             The autoreset environment :meth:`step`
         """
         if self._episode_ended:
-            obs, info = super().reset(options=self._reset_options)
+            obs, info = self.env.reset(options=self._reset_options)
             self._episode_ended = True
             return obs, 0, False, False, info
         else:
@@ -61,27 +72,30 @@ class AutoresetV0(gym.Wrapper):
 
     def reset(
         self, *, seed: int | None = None, options: dict[str, Any] | None = None
-    ) -> tuple[WrapperObsType, dict[str, Any]]:
+    ) -> tuple[ObsType, dict[str, Any]]:
         """Resets the environment, saving the options used."""
         self._episode_ended = False
         self._reset_options = options
         return super().reset(seed=seed, options=self._reset_options)
 
 
-class PassiveEnvCheckerV0(gym.Wrapper):
+class PassiveEnvCheckerV0(
+    gym.Wrapper[ObsType, ActType, ObsType, ActType], gym.utils.RecordConstructorArgs
+):
     """A passive environment checker wrapper that surrounds the step, reset and render functions to check they follow the gymnasium API."""
 
-    def __init__(self, env: Env[ObsType, ActType]):
+    def __init__(self, env: gym.Env[ObsType, ActType]):
         """Initialises the wrapper with the environments, run the observation and action space tests."""
-        super().__init__(env)
+        gym.utils.RecordConstructorArgs.__init__(self)
+        gym.Wrapper.__init__(self, env)
 
         assert hasattr(
             env, "action_space"
-        ), "The environment must specify an action space. https://gymnasium.farama.org/content/environment_creation/"
+        ), "The environment must specify an action space. https://gymnasium.farama.org/tutorials/gymnasium_basics/environment_creation/"
         check_action_space(env.action_space)
         assert hasattr(
             env, "observation_space"
-        ), "The environment must specify an observation space. https://gymnasium.farama.org/content/environment_creation/"
+        ), "The environment must specify an observation space. https://gymnasium.farama.org/tutorials/gymnasium_basics/environment_creation/"
         check_observation_space(env.observation_space)
 
         self._checked_reset: bool = False
@@ -89,8 +103,8 @@ class PassiveEnvCheckerV0(gym.Wrapper):
         self._checked_render: bool = False
 
     def step(
-        self, action: WrapperActType
-    ) -> tuple[WrapperObsType, SupportsFloat, bool, bool, dict[str, Any]]:
+        self, action: ActType
+    ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
         """Steps through the environment that on the first call will run the `passive_env_step_check`."""
         if self._checked_step is False:
             self._checked_step = True
@@ -100,7 +114,7 @@ class PassiveEnvCheckerV0(gym.Wrapper):
 
     def reset(
         self, *, seed: int | None = None, options: dict[str, Any] | None = None
-    ) -> tuple[WrapperObsType, dict[str, Any]]:
+    ) -> tuple[ObsType, dict[str, Any]]:
         """Resets the environment that on the first call will run the `passive_env_reset_check`."""
         if self._checked_reset is False:
             self._checked_reset = True
@@ -117,44 +131,58 @@ class PassiveEnvCheckerV0(gym.Wrapper):
             return self.env.render()
 
 
-class OrderEnforcingV0(gym.Wrapper):
+class OrderEnforcingV0(
+    gym.Wrapper[ObsType, ActType, ObsType, ActType], gym.utils.RecordConstructorArgs
+):
     """A wrapper that will produce an error if :meth:`step` is called before an initial :meth:`reset`.
 
     Example:
-        >>> from gymnasium.envs.classic_control import CartPoleEnv
-        >>> env = CartPoleEnv()
+        >>> import gymnasium as gym
+        >>> from gymnasium.experimental.wrappers import OrderEnforcingV0
+        >>> env = gym.make("CartPole-v1", render_mode="human")
         >>> env = OrderEnforcingV0(env)
         >>> env.step(0)
-        ResetNeeded: Cannot call env.step() before calling env.reset()
+        Traceback (most recent call last):
+            ...
+        gymnasium.error.ResetNeeded: Cannot call env.step() before calling env.reset()
         >>> env.render()
-        ResetNeeded: Cannot call env.render() before calling env.reset()
-        >>> env.reset()
+        Traceback (most recent call last):
+            ...
+        gymnasium.error.ResetNeeded: Cannot call `env.render()` before calling `env.reset()`, if this is a intended action, set `disable_render_order_enforcing=True` on the OrderEnforcer wrapper.
+        >>> _ = env.reset()
         >>> env.render()
-        >>> env.step(0)
+        >>> _ = env.step(0)
+        >>> env.close()
     """
 
-    def __init__(self, env: gym.Env, disable_render_order_enforcing: bool = False):
+    def __init__(
+        self,
+        env: gym.Env[ObsType, ActType],
+        disable_render_order_enforcing: bool = False,
+    ):
         """A wrapper that will produce an error if :meth:`step` is called before an initial :meth:`reset`.
 
         Args:
             env: The environment to wrap
             disable_render_order_enforcing: If to disable render order enforcing
         """
-        super().__init__(env)
+        gym.utils.RecordConstructorArgs.__init__(
+            self, disable_render_order_enforcing=disable_render_order_enforcing
+        )
+        gym.Wrapper.__init__(self, env)
+
         self._has_reset: bool = False
         self._disable_render_order_enforcing: bool = disable_render_order_enforcing
 
-    def step(
-        self, action: WrapperActType
-    ) -> tuple[WrapperObsType, SupportsFloat, bool, bool, dict]:
-        """Steps through the environment with `kwargs`."""
+    def step(self, action: ActType) -> tuple[ObsType, SupportsFloat, bool, bool, dict]:
+        """Steps through the environment."""
         if not self._has_reset:
             raise ResetNeeded("Cannot call env.step() before calling env.reset()")
         return super().step(action)
 
     def reset(
         self, *, seed: int | None = None, options: dict[str, Any] | None = None
-    ) -> tuple[WrapperObsType, dict[str, Any]]:
+    ) -> tuple[ObsType, dict[str, Any]]:
         """Resets the environment with `kwargs`."""
         self._has_reset = True
         return super().reset(seed=seed, options=options)
@@ -174,7 +202,9 @@ class OrderEnforcingV0(gym.Wrapper):
         return self._has_reset
 
 
-class RecordEpisodeStatisticsV0(gym.Wrapper):
+class RecordEpisodeStatisticsV0(
+    gym.Wrapper[ObsType, ActType, ObsType, ActType], gym.utils.RecordConstructorArgs
+):
     """This wrapper will keep track of cumulative rewards and episode lengths.
 
     At the end of an episode, the statistics of the episode will be added to ``info``
@@ -185,7 +215,6 @@ class RecordEpisodeStatisticsV0(gym.Wrapper):
     After the completion of an episode, ``info`` will look like this::
 
         >>> info = {
-        ...     ...
         ...     "episode": {
         ...         "r": "<cumulative reward>",
         ...         "l": "<episode length>",
@@ -196,7 +225,10 @@ class RecordEpisodeStatisticsV0(gym.Wrapper):
     For a vectorized environments the output will be in the form of::
 
         >>> infos = {
-        ...     ...
+        ...     "final_observation": "<array of length num-envs>",
+        ...     "_final_observation": "<boolean array of length num-envs>",
+        ...     "final_info": "<array of length num-envs>",
+        ...     "_final_info": "<boolean array of length num-envs>",
         ...     "episode": {
         ...         "r": "<array of cumulative reward>",
         ...         "l": "<array of episode length>",
@@ -204,6 +236,7 @@ class RecordEpisodeStatisticsV0(gym.Wrapper):
         ...     },
         ...     "_episode": "<boolean array of length num-envs>"
         ... }
+
 
     Moreover, the most recent rewards and episode lengths are stored in buffers that can be accessed via
     :attr:`wrapped_env.return_queue` and :attr:`wrapped_env.length_queue` respectively.
@@ -215,7 +248,7 @@ class RecordEpisodeStatisticsV0(gym.Wrapper):
 
     def __init__(
         self,
-        env: Env[ObsType, ActType],
+        env: gym.Env[ObsType, ActType],
         buffer_length: int | None = 100,
         stats_key: str = "episode",
     ):
@@ -226,7 +259,8 @@ class RecordEpisodeStatisticsV0(gym.Wrapper):
             buffer_length: The size of the buffers :attr:`return_queue` and :attr:`length_queue`
             stats_key: The info key for the episode statistics
         """
-        super().__init__(env)
+        gym.utils.RecordConstructorArgs.__init__(self)
+        gym.Wrapper.__init__(self, env)
 
         self._stats_key = stats_key
 
@@ -235,13 +269,13 @@ class RecordEpisodeStatisticsV0(gym.Wrapper):
         self.episode_reward: float = -1
         self.episode_length: int = -1
 
-        self.episode_time_length_buffer = deque(maxlen=buffer_length)
-        self.episode_reward_buffer = deque(maxlen=buffer_length)
-        self.episode_length_buffer = deque(maxlen=buffer_length)
+        self.episode_time_length_buffer: deque[int] = deque(maxlen=buffer_length)
+        self.episode_reward_buffer: deque[float] = deque(maxlen=buffer_length)
+        self.episode_length_buffer: deque[int] = deque(maxlen=buffer_length)
 
     def step(
-        self, action: WrapperActType
-    ) -> tuple[WrapperObsType, SupportsFloat, bool, bool, dict[str, Any]]:
+        self, action: ActType
+    ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
         """Steps through the environment, recording the episode statistics."""
         obs, reward, terminated, truncated, info = super().step(action)
 
@@ -270,7 +304,7 @@ class RecordEpisodeStatisticsV0(gym.Wrapper):
 
     def reset(
         self, *, seed: int | None = None, options: dict[str, Any] | None = None
-    ) -> tuple[WrapperObsType, dict[str, Any]]:
+    ) -> tuple[ObsType, dict[str, Any]]:
         """Resets the environment using seed and options and resets the episode rewards and lengths."""
         obs, info = super().reset(seed=seed, options=options)
 

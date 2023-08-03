@@ -2,10 +2,9 @@
 from typing import Callable
 
 import gymnasium as gym
-from gymnasium import RewardWrapper
 
 
-class TransformReward(RewardWrapper):
+class TransformReward(gym.RewardWrapper, gym.utils.RecordConstructorArgs):
     """Transform the reward via an arbitrary function.
 
     Warning:
@@ -13,9 +12,10 @@ class TransformReward(RewardWrapper):
 
     Example:
         >>> import gymnasium as gym
-        >>> env = gym.make('CartPole-v1')
+        >>> from gymnasium.wrappers import TransformReward
+        >>> env = gym.make("CartPole-v1")
         >>> env = TransformReward(env, lambda r: 0.01*r)
-        >>> env.reset()
+        >>> _ = env.reset()
         >>> observation, reward, terminated, truncated, info = env.step(env.action_space.sample())
         >>> reward
         0.01
@@ -28,7 +28,9 @@ class TransformReward(RewardWrapper):
             env: The environment to apply the wrapper
             f: A function that transforms the reward
         """
-        super().__init__(env)
+        gym.utils.RecordConstructorArgs.__init__(self, f=f)
+        gym.RewardWrapper.__init__(self, env)
+
         assert callable(f)
         self.f = f
 

@@ -1,6 +1,11 @@
+from __future__ import annotations
+
+from typing import Any, SupportsFloat
+
 import numpy as np
 
 from gymnasium import utils
+from gymnasium.core import ActType, ObsType
 from gymnasium.envs.mujoco import MuJocoPyEnv
 from gymnasium.spaces import Box
 
@@ -31,7 +36,7 @@ class AntEnv(MuJocoPyEnv, utils.EzPickle):
         contact_force_range=(-1.0, 1.0),
         reset_noise_scale=0.1,
         exclude_current_positions_from_observation=True,
-        **kwargs
+        **kwargs,
     ):
         utils.EzPickle.__init__(
             self,
@@ -44,7 +49,7 @@ class AntEnv(MuJocoPyEnv, utils.EzPickle):
             contact_force_range,
             reset_noise_scale,
             exclude_current_positions_from_observation,
-            **kwargs
+            **kwargs,
         )
 
         self._ctrl_cost_weight = ctrl_cost_weight
@@ -112,7 +117,9 @@ class AntEnv(MuJocoPyEnv, utils.EzPickle):
         terminated = not self.is_healthy if self._terminate_when_unhealthy else False
         return terminated
 
-    def step(self, action):
+    def step(
+        self, action: ActType
+    ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
         xy_position_before = self.get_body_com("torso")[:2].copy()
         self.do_simulation(action, self.frame_skip)
         xy_position_after = self.get_body_com("torso")[:2].copy()

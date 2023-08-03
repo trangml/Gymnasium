@@ -1,6 +1,6 @@
 import re
 import warnings
-from typing import Dict, Union
+from typing import Callable, Dict, Union
 
 import numpy as np
 import pytest
@@ -34,33 +34,8 @@ def _modify_space(space: spaces.Space, attribute: str, value):
         # ===== Check box observation space ====
         [
             UserWarning,
-            spaces.Box(np.zeros((5, 5, 1)), 255 * np.ones((5, 5, 1)), dtype=np.int32),
-            "It seems a Box observation space is an image but the `dtype` is not `np.uint8`, actual type: int32. If the Box observation space is not an image, we recommend flattening the observation to have only a 1D vector.",
-        ],
-        [
-            UserWarning,
-            spaces.Box(np.ones((2, 2, 1)), 255 * np.ones((2, 2, 1)), dtype=np.uint8),
-            "It seems a Box observation space is an image but the lower and upper bounds are not [0, 255]. Actual lower bound: 1, upper bound: 255. Generally, CNN policies assume observations are within that range, so you may encounter an issue if the observation values are not.",
-        ],
-        [
-            UserWarning,
-            spaces.Box(np.zeros((5, 5, 1)), np.ones((5, 5, 1)), dtype=np.uint8),
-            "It seems a Box observation space is an image but the lower and upper bounds are not [0, 255]. Actual lower bound: 0, upper bound: 1. Generally, CNN policies assume observations are within that range, so you may encounter an issue if the observation values are not.",
-        ],
-        [
-            UserWarning,
-            spaces.Box(np.zeros((5, 5)), np.ones((5, 5))),
-            "A Box observation space has an unconventional shape (neither an image, nor a 1D vector). We recommend flattening the observation to have only a 1D vector or use a custom policy to properly process the data. Actual observation shape: (5, 5)",
-        ],
-        [
-            UserWarning,
             spaces.Box(np.zeros(5), np.zeros(5)),
             "A Box observation space maximum and minimum values are equal. Actual equal coordinates: [(0,), (1,), (2,), (3,), (4,)]",
-        ],
-        [
-            UserWarning,
-            spaces.Box(np.ones(5), np.zeros(5)),
-            "A Box observation space low value is greater than a high value. Actual less than coordinates: [(0,), (1,), (2,), (3,), (4,)]",
         ],
         [
             AssertionError,
@@ -132,11 +107,6 @@ def test_check_observation_space(test, space, message: str):
             UserWarning,
             spaces.Box(np.zeros(5), np.zeros(5)),
             "A Box action space maximum and minimum values are equal. Actual equal coordinates: [(0,), (1,), (2,), (3,), (4,)]",
-        ],
-        [
-            UserWarning,
-            spaces.Box(np.ones(5), np.zeros(5)),
-            "A Box action space low value is greater than a high value. Actual less than coordinates: [(0,), (1,), (2,), (3,), (4,)]",
         ],
         [
             AssertionError,
@@ -266,9 +236,9 @@ def _make_reset_results(results):
     "test,func,message,kwargs",
     [
         [
-            UserWarning,
+            DeprecationWarning,
             _reset_no_seed,
-            "Future gymnasium versions will require that `Env.reset` can be passed a `seed` instead of using `Env.seed` for resetting the environment random number generator.",
+            "Current gymnasium version requires that `Env.reset` can be passed a `seed` instead of using `Env.seed` for resetting the environment random number generator.",
             {},
         ],
         [
@@ -278,9 +248,9 @@ def _make_reset_results(results):
             {},
         ],
         [
-            UserWarning,
+            DeprecationWarning,
             _reset_no_option,
-            "Future gymnasium versions will require that `Env.reset` can be passed `options` to allow the environment initialisation to be passed additional information.",
+            "Current gymnasium version requires that `Env.reset` can be passed `options` to allow the environment initialisation to be passed additional information.",
             {},
         ],
         [
@@ -297,11 +267,17 @@ def _make_reset_results(results):
         ],
     ],
 )
-def test_passive_env_reset_checker(test, func: callable, message: str, kwargs: Dict):
+def test_passive_env_reset_checker(test, func: Callable, message: str, kwargs: Dict):
     """Tests the passive env reset check"""
     if test is UserWarning:
         with pytest.warns(
             UserWarning, match=f"^\\x1b\\[33mWARN: {re.escape(message)}\\x1b\\[0m$"
+        ):
+            env_reset_passive_checker(GenericTestEnv(reset_func=func), **kwargs)
+    elif test is DeprecationWarning:
+        with pytest.warns(
+            DeprecationWarning,
+            match=f"^\\x1b\\[33mWARN: {re.escape(message)}\\x1b\\[0m$",
         ):
             env_reset_passive_checker(GenericTestEnv(reset_func=func), **kwargs)
     else:
@@ -376,7 +352,7 @@ def _modified_step(
     ],
 )
 def test_passive_env_step_checker(
-    test: Union[UserWarning, type], func: callable, message: str
+    test: Union[UserWarning, type], func: Callable, message: str
 ):
     """Tests the passive env step checker."""
     if test is UserWarning:

@@ -1,10 +1,14 @@
+from __future__ import annotations
+
 from os import path
-from typing import Optional, Union
+from typing import Any, SupportsFloat
 
 import numpy as np
+from numpy.typing import NDArray
 
 import gymnasium as gym
 from gymnasium import error, logger, spaces
+from gymnasium.core import ActType, ObsType, RenderFrame
 from gymnasium.spaces import Space
 
 
@@ -26,7 +30,7 @@ else:
 DEFAULT_SIZE = 480
 
 
-class BaseMujocoEnv(gym.Env):
+class BaseMujocoEnv(gym.Env[NDArray[np.float64], NDArray[np.float32]]):
     """Superclass for all MuJoCo environments."""
 
     def __init__(
@@ -34,14 +38,32 @@ class BaseMujocoEnv(gym.Env):
         model_path,
         frame_skip,
         observation_space: Space,
-        render_mode: Optional[str] = None,
+        render_mode: str | None = None,
         width: int = DEFAULT_SIZE,
         height: int = DEFAULT_SIZE,
-        camera_id: Optional[int] = None,
-        camera_name: Optional[str] = None,
+        camera_id: int | None = None,
+        camera_name: str | None = None,
     ):
-        if model_path.startswith("/"):
+        """Base abstract class for mujoco based environments.
+
+        Args:
+            model_path: Path to the MuJoCo Model.
+            frame_skip: Number of MuJoCo simulation steps per gym `step()`.
+            observation_space: The observation space of the environment.
+            render_mode: The `render_mode` used.
+            width: The width of the render window.
+            height: The height of the render window.
+            camera_id: The camera ID used.
+            camera_name: The name of the camera used (can not be used in conjunction with `camera_id`).
+
+        Raises:
+            OSError: when the `model_path` does not exist.
+            error.DependencyNotInstalled: When `mujoco` is not installed.
+        """
+        if model_path.startswith(".") or model_path.startswith("/"):
             self.fullpath = model_path
+        elif model_path.startswith("~"):
+            self.fullpath = path.expanduser(model_path)
         else:
             self.fullpath = path.join(path.dirname(__file__), "assets", model_path)
         if not path.exists(self.fullpath):
@@ -49,7 +71,8 @@ class BaseMujocoEnv(gym.Env):
 
         self.width = width
         self.height = height
-        self._initialize_simulation()  # may use width and height
+        # may use width and height
+        self.model, self.data = self._initialize_simulation()
 
         self.init_qpos = self.data.qpos.ravel().copy()
         self.init_qvel = self.data.qvel.ravel().copy()
@@ -61,9 +84,10 @@ class BaseMujocoEnv(gym.Env):
             "rgb_array",
             "depth_array",
         ], self.metadata["render_modes"]
-        assert (
-            int(np.round(1.0 / self.dt)) == self.metadata["render_fps"]
-        ), f'Expected value: {int(np.round(1.0 / self.dt))}, Actual value: {self.metadata["render_fps"]}'
+        if "render_fps" in self.metadata:
+            assert (
+                int(np.round(1.0 / self.dt)) == self.metadata["render_fps"]
+            ), f'Expected value: {int(np.round(1.0 / self.dt))}, Actual value: {self.metadata["render_fps"]}'
 
         self.observation_space = observation_space
         self._set_action_space()
@@ -80,73 +104,82 @@ class BaseMujocoEnv(gym.Env):
 
     # methods to override:
     # ----------------------------
+    def step(
+        self, action: ActType
+    ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
+        raise NotImplementedError
 
-    def reset_model(self):
+    def reset_model(self) -> NDArray[np.float64]:
         """
         Reset the robot degrees of freedom (qpos and qvel).
         Implement this in each subclass.
         """
         raise NotImplementedError
 
-    def _initialize_simulation(self):
+    def _initialize_simulation(self) -> tuple[Any, Any]:
         """
         Initialize MuJoCo simulation data structures mjModel and mjData.
         """
         raise NotImplementedError
 
-    def _reset_simulation(self):
+    def _reset_simulation(self) -> None:
         """
         Reset MuJoCo simulation data structures, mjModel and mjData.
         """
         raise NotImplementedError
 
-    def _step_mujoco_simulation(self, ctrl, n_frames):
+    def _step_mujoco_simulation(self, ctrl, n_frames) -> None:
         """
         Step over the MuJoCo simulation.
         """
         raise NotImplementedError
 
-    def render(self):
+    def render(self) -> RenderFrame | list[RenderFrame] | None:
         """
         Render a frame from the MuJoCo simulation as specified by the render_mode.
         """
         raise NotImplementedError
 
     # -----------------------------
+    def _get_reset_info(self) -> dict[str, float]:
+        """Function that generates the `info` that is returned during a `reset()`."""
+        return {}
 
     def reset(
         self,
         *,
-        seed: Optional[int] = None,
-        options: Optional[dict] = None,
-    ):
+        seed: int | None = None,
+        options: dict[str, Any] | None = None,
+    ) -> tuple[ObsType, dict[str, Any]]:
         super().reset(seed=seed)
 
         self._reset_simulation()
 
         ob = self.reset_model()
+        info = self._get_reset_info()
+
         if self.render_mode == "human":
             self.render()
-        return ob, {}
+        return ob, info
 
-    def set_state(self, qpos, qvel):
+    def set_state(self, qpos, qvel) -> None:
         """
         Set the joints position qpos and velocity qvel of the model. Override this method depending on the MuJoCo bindings used.
         """
         assert qpos.shape == (self.model.nq,) and qvel.shape == (self.model.nv,)
 
     @property
-    def dt(self):
+    def dt(self) -> float:
         return self.model.opt.timestep * self.frame_skip
 
-    def do_simulation(self, ctrl, n_frames):
+    def do_simulation(self, ctrl, n_frames) -> None:
         """
         Step the simulation n number of frames and applying a control action.
         """
         # Check control input is contained in the action space
-        if np.array(ctrl).shape != self.action_space.shape:
+        if np.array(ctrl).shape != (self.model.nu,):
             raise ValueError(
-                f"Action dimension mismatch. Expected {self.action_space.shape}, found {np.array(ctrl).shape}"
+                f"Action dimension mismatch. Expected {(self.model.nu,)}, found {np.array(ctrl).shape}"
             )
         self._step_mujoco_simulation(ctrl, n_frames)
 
@@ -154,11 +187,11 @@ class BaseMujocoEnv(gym.Env):
         """Close all processes like rendering contexts"""
         raise NotImplementedError
 
-    def get_body_com(self, body_name):
+    def get_body_com(self, body_name) -> NDArray[np.float64]:
         """Return the cartesian position of a body frame"""
         raise NotImplementedError
 
-    def state_vector(self):
+    def state_vector(self) -> NDArray[np.float64]:
         """Return the position and velocity joint states of the model"""
         return np.concatenate([self.data.qpos.flat, self.data.qvel.flat])
 
@@ -169,21 +202,23 @@ class MuJocoPyEnv(BaseMujocoEnv):
         model_path: str,
         frame_skip: int,
         observation_space: Space,
-        render_mode: Optional[str] = None,
+        render_mode: str | None = None,
         width: int = DEFAULT_SIZE,
         height: int = DEFAULT_SIZE,
-        camera_id: Optional[int] = None,
-        camera_name: Optional[str] = None,
+        camera_id: int | None = None,
+        camera_name: str | None = None,
     ):
         if MUJOCO_PY_IMPORT_ERROR is not None:
             raise error.DependencyNotInstalled(
-                f"{MUJOCO_PY_IMPORT_ERROR}. (HINT: you need to install mujoco_py, and also perform the setup instructions here: https://github.com/openai/mujoco-py/.)"
+                f"{MUJOCO_PY_IMPORT_ERROR}. "
+                "(HINT: you need to install mujoco-py, and also perform the setup instructions "
+                "here: https://github.com/openai/mujoco-py.)"
             )
 
-        logger.warn(
+        logger.deprecation(
             "This version of the mujoco environments depends "
             "on the mujoco-py bindings, which are no longer maintained "
-            "and may stop working. Please upgrade to the v4 versions of "
+            "and may stop working. Please upgrade to the v5 or v4 versions of "
             "the environments (which depend on the mujoco python bindings instead), unless "
             "you are trying to precisely replicate previous works)."
         )
@@ -203,9 +238,10 @@ class MuJocoPyEnv(BaseMujocoEnv):
         )
 
     def _initialize_simulation(self):
-        self.model = mujoco_py.load_model_from_path(self.fullpath)
-        self.sim = mujoco_py.MjSim(self.model)
-        self.data = self.sim.data
+        model = mujoco_py.load_model_from_path(self.fullpath)
+        self.sim = mujoco_py.MjSim(model)
+        data = self.sim.data
+        return model, data
 
     def _reset_simulation(self):
         self.sim.reset()
@@ -226,7 +262,7 @@ class MuJocoPyEnv(BaseMujocoEnv):
         for _ in range(n_frames):
             self.sim.step()
 
-    def render(self):
+    def render(self) -> RenderFrame | list[RenderFrame] | None:
         if self.render_mode is None:
             assert self.spec is not None
             gym.logger.warn(
@@ -276,7 +312,7 @@ class MuJocoPyEnv(BaseMujocoEnv):
 
     def _get_viewer(
         self, mode
-    ) -> Union["mujoco_py.MjViewer", "mujoco_py.MjRenderContextOffscreen"]:
+    ) -> mujoco_py.MjViewer | mujoco_py.MjRenderContextOffscreen:
         self.viewer = self._viewers.get(mode)
         if self.viewer is None:
             if mode == "human":
@@ -294,7 +330,7 @@ class MuJocoPyEnv(BaseMujocoEnv):
 
         return self.viewer
 
-    def close(self):
+    def close(self) -> None:
         if self.viewer is not None:
             self.viewer = None
             self._viewers = {}
@@ -315,16 +351,17 @@ class MujocoEnv(BaseMujocoEnv):
         model_path,
         frame_skip,
         observation_space: Space,
-        render_mode: Optional[str] = None,
+        render_mode: str | None = None,
         width: int = DEFAULT_SIZE,
         height: int = DEFAULT_SIZE,
-        camera_id: Optional[int] = None,
-        camera_name: Optional[str] = None,
-        default_camera_config: Optional[dict] = None,
+        camera_id: int | None = None,
+        camera_name: str | None = None,
+        default_camera_config: dict[str, float | int] | None = None,
     ):
         if MUJOCO_IMPORT_ERROR is not None:
             raise error.DependencyNotInstalled(
-                f"{MUJOCO_IMPORT_ERROR}. (HINT: you need to install mujoco)"
+                f"{MUJOCO_IMPORT_ERROR}. "
+                "(HINT: you need to install mujoco, run `pip install gymnasium[mujoco]`.)"
             )
 
         super().__init__(
@@ -341,15 +378,18 @@ class MujocoEnv(BaseMujocoEnv):
         from gymnasium.envs.mujoco.mujoco_rendering import MujocoRenderer
 
         self.mujoco_renderer = MujocoRenderer(
-            self.model, self.data, default_camera_config
+            self.model, self.data, default_camera_config, self.width, self.height
         )
 
-    def _initialize_simulation(self):
-        self.model = mujoco.MjModel.from_xml_path(self.fullpath)
+    def _initialize_simulation(
+        self,
+    ) -> tuple[mujoco._structs.MjModel, mujoco._structs.MjData]:
+        model = mujoco.MjModel.from_xml_path(self.fullpath)
         # MjrContext will copy model.vis.global_.off* to con.off*
-        self.model.vis.global_.offwidth = self.width
-        self.model.vis.global_.offheight = self.height
-        self.data = mujoco.MjData(self.model)
+        model.vis.global_.offwidth = self.width
+        model.vis.global_.offheight = self.height
+        data = mujoco.MjData(model)
+        return model, data
 
     def _reset_simulation(self):
         mujoco.mj_resetData(self.model, self.data)
@@ -365,19 +405,19 @@ class MujocoEnv(BaseMujocoEnv):
     def _step_mujoco_simulation(self, ctrl, n_frames):
         self.data.ctrl[:] = ctrl
 
-        mujoco.mj_step(self.model, self.data, nstep=self.frame_skip)
+        mujoco.mj_step(self.model, self.data, nstep=n_frames)
 
         # As of MuJoCo 2.0, force-related quantities like cacc are not computed
         # unless there's a force sensor in the model.
         # See https://github.com/openai/gym/issues/1541
         mujoco.mj_rnePostConstraint(self.model, self.data)
 
-    def render(self):
+    def render(self) -> RenderFrame | list[RenderFrame] | None:
         return self.mujoco_renderer.render(
             self.render_mode, self.camera_id, self.camera_name
         )
 
-    def close(self):
+    def close(self) -> None:
         if self.mujoco_renderer is not None:
             self.mujoco_renderer.close()
 
